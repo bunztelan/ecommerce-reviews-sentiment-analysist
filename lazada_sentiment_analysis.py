@@ -17,73 +17,62 @@ import matplotlib.pyplot as plt
 from imblearn.over_sampling import SMOTE
 import chardet
 import encodings
-
-
+from sklearn.preprocessing import LabelEncoder
+from sklearn.utils.class_weight import compute_class_weight
+print(tf.__version__)
 def clean_text(text):
     import re
     text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
     text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
     text = text.strip().lower()  # Trim leading/trailing spaces and lowercase
     return text
-
+print("Load Data...")
 # Load data
 reviews = pd.read_csv('lazada_reviews/20191002-reviews.csv')
-
+print("Data Loaded...")
 # Preprocess data
+print("Preprocessing...")
+print("Preprocessing - drop original rating...")
 reviews = reviews.drop('originalRating', axis=1)
 
+print("Preprocessing - Fill empty value...")
 reviews['reviewContent'] = reviews['reviewContent'].fillna('unknown')
 reviews['reviewTitle'] = reviews['reviewTitle'].fillna('unknown')
 
+print("Preprocessing - Cleaning Review Text...")
 reviews['reviewContent'] = reviews['reviewContent'].apply(clean_text)
 reviews['reviewTitle'] = reviews['reviewTitle'].apply(clean_text)
 
 # Define sentiment
+print("Preprocessing - defining sentiment...")
 reviews['sentiment'] = reviews['rating'].apply(lambda x: 'negative' if x < 4 else 'positive')
 
-# Feature Engineering (optional)
-reviews['word_count'] = reviews['reviewContent'].apply(lambda x: len(x.split()))
-# Define sentiment based on rating
-tfidf_vectorizer_title = TfidfVectorizer(max_features=2500)
-X_title_tfidf = tfidf_vectorizer_title.fit_transform(reviews['reviewTitle']).toarray()
-
-tfidf_vectorizer_content = TfidfVectorizer(max_features=5000)
-X_content_tfidf = tfidf_vectorizer_content.fit_transform(reviews['reviewContent']).toarray()
-
-# Concatenate the features
-X_combined = np.concatenate((X_title_tfidf, X_content_tfidf), axis=1)
-# Separate features (text columns) and target (sentiment)
-X = reviews[['reviewTitle', 'reviewContent']]
-y = reviews['sentiment']
-
-# Apply SMOTE for oversampling the minority class
-smote = SMOTE(sampling_strategy='minority')
-X_resampled, y_resampled = smote.fit_resample(X_combined, y)
-
-# Combine features and target after resampling
-reviews_resampled = pd.DataFrame({'reviewTitle': X_resampled[:, 0], 'reviewContent': X_resampled[:, 1], 'sentiment': y_resampled})
-
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(reviews_resampled['reviewContent'], reviews_resampled['sentiment'], test_size=0.2, random_state=42, stratify=reviews_resampled['rating'])  # Stratify for balanced classes
-
-# Tokenization
-max_length = 400  # Adjust based on analysis
+# Tokenization and sequence padding
+X = reviews['reviewContent']
+y = reviews['sentiment'].values
 tokenizer = Tokenizer(num_words=5000, oov_token="<OOV>")
-tokenizer.fit_on_texts(X_train)
-sequences_train = tokenizer.texts_to_sequences(X_train)
-sequences_test = tokenizer.texts_to_sequences(X_test)
+tokenizer.fit_on_texts(X)
+sequences = tokenizer.texts_to_sequences(X)
+padded_sequences = pad_sequences(sequences, maxlen=400, padding='post', truncating='post')
 
-padded_sequences_train = pad_sequences(sequences_train, maxlen=max_length, truncating='post', padding='post')
-padded_sequences_test = pad_sequences(sequences_test, maxlen=max_length, truncating='post', padding='post')
-
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(padded_sequences, y, test_size=0.2, random_state=42, stratify=y)
+label_encoder = LabelEncoder()
+y_train_encoded = label_encoder.fit_transform(y_train)
+y_test_encoded = label_encoder.transform(y_test)
+# Calculate class weights
+class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+class_weight_dict = dict(enumerate(class_weights))
 # Model definition with Regularization
+print(" Defining Model...")
+# Define the LSTM model
 model = Sequential([
-  Embedding(input_dim=5000, output_dim=128, input_length=max_length),
-  Bidirectional(LSTM(64, return_sequences=True)),
-  Dropout(0.4),  # Increased dropout
-  LSTM(32),
-  Dropout(0.5),  # Increased dropout
-  Dense(1, activation='sigmoid')
+    Embedding(input_dim=5000, output_dim=128),  # Use **kwargs for max_length
+    Bidirectional(LSTM(64, return_sequences=True)),
+    Dropout(0.5),
+    LSTM(32),
+    Dropout(0.5),
+    Dense(1, activation='sigmoid')
 ])
 
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -91,12 +80,15 @@ model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy']
 # Early stopping (optional)
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3)
 
-# Train model
-model.fit(padded_sequences_train, y_train, epochs=10, validation_data=(padded_sequences_test, y_test), callbacks=[early_stopping])
+# Train the model with class weights
+print("Training Model with Class Weights...")
+print(X_train[:5])  # Check the first few training sequences
+print(y_train_encoded[:5]) 
+model.fit(X_train, y_train_encoded, epochs=10, validation_data=(X_test, y_test_encoded), class_weight=class_weight_dict, callbacks=[early_stopping])
 
-# Evaluate model
-loss, accuracy = model.evaluate(padded_sequences_test, y_test)
+# Evaluate the model
+loss, accuracy = model.evaluate(X_test, y_test_encoded)
 print(f"Test Accuracy: {accuracy*100:.2f}%")
 
-# Save model
-model.save('sentiment_analysis_model_v2.h5')
+# Save the model
+model.save('sentiment_analysis_model_class_weights.h5')

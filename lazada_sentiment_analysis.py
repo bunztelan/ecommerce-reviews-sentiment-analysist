@@ -1,18 +1,12 @@
 import numpy as np
 import pandas as pd
-import re
-import nltk
-nltk.download('stopwords')
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
-from nltk.corpus import stopwords  # Import stopwords library
-from tensorflow.keras import callbacks as keras
-from tensorflow.keras.optimizers import Adam  
-from imblearn.over_sampling import SMOTE
+from tensorflow.keras.optimizers import Adam
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_class_weight
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory

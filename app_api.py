@@ -8,7 +8,7 @@ import json
 app = Flask(__name__)
 
 # Load your trained model
-model = load_model('my_model_3.keras')
+model = load_model('my_model.keras')
 
 # Assuming you have your tokenizer saved, load it here. For demonstration, we will initialize it afresh.
 # In a real scenario, you would save and load your tokenizer to ensure consistency.
@@ -44,4 +44,4 @@ def predict():
     return jsonify({'review': review, 'sentiment': sentiment})
 
 if __name__ == '__main__':
-    app.run(port=8001, debug=True)
+    app.run(port=8002, debug=True)

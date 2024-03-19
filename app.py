@@ -5,7 +5,7 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 
 app = Flask(__name__)
 
-model = tf.keras.models.load_model('my_model_2.keras')
+model = tf.keras.models.load_model('my_model.keras')
 tokenizer = Tokenizer(num_words=5000, oov_token='<OOV>')
 @app.route('/')
 def home():

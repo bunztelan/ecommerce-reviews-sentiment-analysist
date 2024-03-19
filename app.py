@@ -1,45 +1,47 @@
-from flask import Flask, request, jsonify, current_app
-from tensorflow.keras.models import load_model
+from flask import Flask, request
+import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
-import numpy as np
-import json
 
 app = Flask(__name__)
 
-# Load your trained model
-model = load_model('sentiment_analysis_model.h5')
-
-# Assuming you have your tokenizer saved, load it here. For demonstration, we will initialize it afresh.
-# In a real scenario, you would save and load your tokenizer to ensure consistency.
+model = tf.keras.models.load_model('my_model_2.keras')
 tokenizer = Tokenizer(num_words=5000, oov_token='<OOV>')
-
-# Test conversion
-
+@app.route('/')
+def home():
+    return '''
+        <form action="/predict" method="post">
+            <textarea name="text" rows="10" cols="30"></textarea><br>
+            <input type="submit" value="Predict Sentiment">
+        </form>
+    '''
 
 @app.route('/predict', methods=['POST'])
 def predict():
-   
-    data = request.get_json(force=True)
-    review = data['review']
-    print(review)
-    tokenizer.fit_on_texts(review)
-    if not review:
-        return jsonify({'error': 'Review text is missing.'}), 400
-    
-    # Tokenize and pad the review
-    sequences = tokenizer.texts_to_sequences([review])
-    sequences = [sublist for sublist in sequences if None not in sublist]
-    padded = pad_sequences(sequences, maxlen=400)  # Ensure this matches the maxlen used during training
-    
-    # Make prediction
-    # print(padded)
-    prediction = model.predict(padded)
-    print(prediction)
+    input_text = request.form['text']
+    preprocessed_text = preprocess_input(input_text)
+    prediction = model.predict(preprocessed_text)
+    readable_prediction = format_prediction(prediction)
+    return f'Prediction: {readable_prediction}'
+
+def clean_text(text):
+    import re
+    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
+    text = text.strip().lower()  # Trim leading/trailing spaces and lowercase
+    return text
+
+def preprocess_input(text):
+    text = clean_text(text)
+    tokenizer.fit_on_texts([text])
+    sequences = tokenizer.texts_to_sequences([text])
+    padded_sequences = pad_sequences(sequences, maxlen=10, padding='post', truncating='post')
+    return padded_sequences
+
+def format_prediction(prediction):
+    prediction = model.predict(prediction)
     sentiment = 'positive' if prediction[0][0] > 0.5 else 'negative'
-    
-    # Return the result
-    return jsonify({'review': review, 'sentiment': sentiment})
+    return sentiment
 
 if __name__ == '__main__':
-    app.run(port=8000, debug=True)
+    app.run(debug=True)

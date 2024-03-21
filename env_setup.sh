@@ -5,3 +5,4 @@ pip install scikit-learn
 pip install matplotlib
 pip install imbalanced-learn
 pip install chardet
+pip install Sastrawi
